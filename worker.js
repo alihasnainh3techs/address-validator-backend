@@ -99,7 +99,7 @@ const worker = new Worker("orderAddressQueue", async (job) => {
             ? [addressData.address1, addressData.address2, addressData.city, addressData.province, addressData.zip, addressData.country].filter(Boolean).join(", ")
             : "No address provided";
 
-        const updateLink = `${process.env.APP_BASE_URL}/${token}`;
+        const updateLink = `${process.env.APP_BASE_URL}/address-update/${token}`;
 
         const variables = {
             customer_name: fullName,
@@ -225,7 +225,7 @@ const worker = new Worker("orderAddressQueue", async (job) => {
         ? [addressData.address1, addressData.address2, addressData.city, addressData.province, addressData.zip, addressData.country].filter(Boolean).join(", ")
         : "No address provided";
 
-    const updateLink = `${process.env.APP_BASE_URL}/${token}`;
+    const updateLink = `${process.env.APP_BASE_URL}/address-update/${token}`;
 
     const variables = {
         customer_name: fullName,
