@@ -7,8 +7,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js",
+    "dev": "nodemon app.js",
+    "start": "node app.js",
     "format": "npx prettier . --write",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -19,6 +19,7 @@
     "dotenv": "^17.2.3",
     "handlebars": "^4.7.8",
     "ioredis": "^5.9.2",
+    "node-cron": "^4.2.1",
     "nodemailer": "^8.0.2"
   },
   "devDependencies": {

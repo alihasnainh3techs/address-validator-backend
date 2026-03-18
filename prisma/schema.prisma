@@ -7,9 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model AddressValidationRule {
+model addressvalidationrule {
   id                               Int      @id @default(autoincrement())
-  shop                             String   @unique
+  shop                             String   @unique(map: "AddressValidationRule_shop_key")
   min_char_length                  Int      @default(20)
   min_word_count                   Int      @default(4)
   structural_keywords              String   @db.LongText
@@ -23,34 +23,35 @@ model AddressValidationRule {
   updated_at                       DateTime @default(now())
 }
 
-model Order {
+model order {
   id               Int                  @id @default(autoincrement())
   shop             String
   order_id         String
   name             String
   customer         String
-  address_status   Order_address_status @default(COMPLETE)
+  address_status   order_address_status @default(COMPLETE)
   failed_rules     String?              @db.LongText
   created_at       DateTime             @default(now())
   updated_at       DateTime
-  OrderAddressLink OrderAddressLink[]
+  retry_count      Int                  @default(0)
+  orderaddresslink orderaddresslink[]
 
-  @@unique([shop, order_id])
-  @@index([shop])
+  @@unique([shop, order_id], map: "Order_shop_order_id_key")
+  @@index([shop], map: "Order_shop_idx")
 }
 
-model OrderAddressLink {
+model orderaddresslink {
   id         Int       @id @default(autoincrement())
   order_id   Int
-  token      String    @unique
+  token      String    @unique(map: "OrderAddressLink_token_key")
   used_at    DateTime?
   created_at DateTime  @default(now())
-  Order      Order     @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  order      order     @relation(fields: [order_id], references: [id], onDelete: Cascade, map: "OrderAddressLink_order_id_fkey")
 
-  @@index([order_id])
+  @@index([order_id], map: "OrderAddressLink_order_id_idx")
 }
 
-model Session {
+model session {
   id                  String    @id
   shop                String
   state               String
@@ -70,21 +71,21 @@ model Session {
   refreshTokenExpires DateTime?
 }
 
-model ShopConfig {
+model shopconfig {
   id                       Int                               @id @default(autoincrement())
-  shop                     String                            @unique
+  shop                     String                            @unique(map: "ShopConfig_shop_key")
   app_enabled              Boolean                           @default(true)
   max_retry_limit          Int                               @default(3)
   reminder_interval_amount Int                               @default(1)
-  reminder_interval_unit   ShopConfig_reminder_interval_unit @default(HOURS)
+  reminder_interval_unit   shopconfig_reminder_interval_unit @default(HOURS)
   created_at               DateTime                          @default(now())
   updated_at               DateTime                          @default(now())
 }
 
-model ShopNotification {
+model shopnotification {
   id                Int                                @id @default(autoincrement())
-  shop              String                             @unique
-  notification_type ShopNotification_notification_type @default(EMAIL)
+  shop              String                             @unique(map: "ShopNotification_shop_key")
+  notification_type shopnotification_notification_type @default(EMAIL)
   email_subject     String?
   email_body        String?                            @db.Text
   whatsapp_template String?                            @db.Text
@@ -92,28 +93,28 @@ model ShopNotification {
   updated_at        DateTime                           @default(now())
 }
 
-model ShopTags {
+model shoptags {
   id                  Int    @id @default(autoincrement())
-  shop                String @unique
+  shop                String @unique(map: "ShopTags_shop_key")
   incomplete_tag      String @default("address_incomplete")
   awaiting_update_tag String @default("awaiting_customer_update")
   verified_tag        String @default("address_verified")
   updated_tag         String @default("address_updated")
 }
 
-enum ShopNotification_notification_type {
+enum shopnotification_notification_type {
   WHATSAPP
   EMAIL
 }
 
-enum Order_address_status {
+enum order_address_status {
   COMPLETE
   INCOMPLETE
   AWAITING_CUSTOMER_RESPONSE
   VERIFIED
 }
 
-enum ShopConfig_reminder_interval_unit {
+enum shopconfig_reminder_interval_unit {
   MINUTES
   HOURS
   DAYS
