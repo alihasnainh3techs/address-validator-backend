@@ -96,7 +96,7 @@ const worker = new Worker("orderAddressQueue", async (job) => {
             ? [addressData.address1, addressData.address2, addressData.city, addressData.province, addressData.zip, addressData.country].filter(Boolean).join(", ")
             : "No address provided";
 
-        const updateLink = `https://your-app-url.com/address-update/${token}`;
+        const updateLink = `${process.env.APP_BASE_URL}/${token}`;
 
         const variables = {
             customer_name: fullName,
