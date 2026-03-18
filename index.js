@@ -8,9 +8,10 @@ import redis from "./lib/redis.js";
 import renderTemplate from "./lib/template.js";
 
 const worker = new Worker("orderAddressQueue", async (job) => {
+
     const { shop, orderId, customer, name, failedChecks, action } = job.data;
 
-    const session = await db.session.findFirst({ where: { shop } });
+    const session = await db.Session.findFirst({ where: { shop } });
     if (!session) throw new Error("Session not found");
 
     const client = new shopify.clients.Graphql({
@@ -19,16 +20,14 @@ const worker = new Worker("orderAddressQueue", async (job) => {
     })
 
     const [shoptags, shopconfig, shopnotification] = await Promise.all([
-        db.shoptags.findUnique({ where: { shop } }),
-        db.shopconfig.findUnique({ where: { shop } }),
-        db.shopnotification.findUnique({ where: { shop } }),
+        db.ShopTags.findUnique({ where: { shop } }),
+        db.ShopConfig.findUnique({ where: { shop } }),
+        db.ShopNotification.findUnique({ where: { shop } }),
     ]);
 
     const gid = `gid://shopify/Order/${orderId}`;
 
     if (action === "address_verified") {
-        const tag = shoptags.verified_tag;
-
         const response = await client.request(
             `mutation addTags($id: ID!, $tags: [String!]!) {
                 tagsAdd(id: $id, tags: $tags) {
@@ -36,7 +35,7 @@ const worker = new Worker("orderAddressQueue", async (job) => {
                 }
             }`,
             {
-                variables: { id: gid, tags: [tag] },
+                variables: { id: gid, tags: [shoptags.verified_tag] },
             }
         );
 
@@ -45,7 +44,7 @@ const worker = new Worker("orderAddressQueue", async (job) => {
             throw new Error(`Shopify GraphQL Error: ${errorMsg}`);
         }
 
-        return await db.order.upsert({
+        return await db.Order.upsert({
             where: {
                 shop_order_id: {
                     shop: shop,
@@ -57,9 +56,50 @@ const worker = new Worker("orderAddressQueue", async (job) => {
         });
     }
 
-    const token = crypto.randomBytes(24).toString('hex');
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    const response = await client.request(
+        `mutation addTags($id: ID!, $tags: [String!]!) {
+            tagsAdd(id: $id, tags: $tags) { userErrors { message } }
+        }`,
+        { variables: { id: gid, tags: [shoptags.incomplete_tag] } }
+    );
+
+    if (response.data?.tagsAdd?.userErrors?.length > 0) {
+        const errorMsg = response.data.tagsAdd.userErrors.map(e => e.message).join(", ");
+        throw new Error(`Shopify GraphQL Error: ${errorMsg}`);
+    }
+
+    const dbOrder = await db.Order.upsert({
+        where: { shop_order_id: { shop, order_id: orderId.toString() } },
+        update: {
+            failed_rules: JSON.stringify(failedChecks),
+            updated_at: new Date()
+        },
+        create: {
+            shop,
+            order_id: orderId.toString(),
+            customer,
+            name,
+            address_status: "INCOMPLETE",
+            failed_rules: JSON.stringify(failedChecks),
+            updated_at: new Date()
+        }
+    });
+
+    let linkRecord = await db.OrderAddressLink.findFirst({
+        where: { order_id: dbOrder.id }
+    });
+
+    let token = linkRecord?.token;
+
+    if (!token) {
+        token = crypto.randomBytes(24).toString('hex');
+        linkRecord = await db.orderAddressLink.create({
+            data: {
+                order_id: dbOrder.id,
+                token: token
+            }
+        });
+    }
 
     const orderDetailsResponse = await client.request(
         `query getOrderDetails($id: ID!) {
@@ -90,29 +130,18 @@ const worker = new Worker("orderAddressQueue", async (job) => {
     );
 
     const fetchedShop = orderDetailsResponse.data?.shop;
-    console.log("Shop: ", fetchedShop);
     const fetchedOrder = orderDetailsResponse.data?.order;
     const customerData = fetchedOrder?.customer;
-    console.log("customerData: ", customerData);
     const addressData = fetchedOrder?.shippingAddress;
-    console.log("addressData: ", addressData);
     const customerEmail = fetchedOrder?.email || customerData?.email;
 
     const fullName = [customerData?.firstName, customerData?.lastName].filter(Boolean).join(" ") || "Customer";
 
-    let formattedAddress = "No address provided";
-    if (addressData) {
-        formattedAddress = [
-            addressData.address1,
-            addressData.address2,
-            addressData.city,
-            addressData.province,
-            addressData.zip,
-            addressData.country
-        ].filter(Boolean).join(", ");
-    }
+    const formattedAddress = addressData
+        ? [addressData.address1, addressData.address2, addressData.city, addressData.province, addressData.zip, addressData.country].filter(Boolean).join(", ")
+        : "No address provided";
 
-    const updateLink = `https://your-app-url.com/update-address/${token}`;
+    const updateLink = `https://your-app-url.com/address-update/${token}`;
 
     const variables = {
         customer_name: fullName,
@@ -144,16 +173,34 @@ const worker = new Worker("orderAddressQueue", async (job) => {
                 subject: subject,
                 text: body,
             })
+
+            const response = await client.request(
+                `mutation switchTags($id: ID!, $add: [String!]!, $remove: [String!]!) {
+                    tagsAdd(id: $id, tags: $add) { userErrors { message } }
+                    tagsRemove(id: $id, tags: $remove) { userErrors { message } }
+                }`,
+                {
+                    variables: {
+                        id: gid,
+                        add: [shoptags.awaiting_update_tag],
+                        remove: [shoptags.incomplete_tag]
+                    },
+                }
+            );
+
+            if (response.data?.tagsAdd?.userErrors?.length > 0) {
+                const errorMsg = response.data.tagsAdd.userErrors.map(e => e.message).join(", ");
+                throw new Error(`Shopify GraphQL Error: ${errorMsg}`);
+            }
+
+            await db.Order.update({
+                where: { id: dbOrder.id },
+                data: { address_status: "AWAITING_CUSTOMER_RESPONSE" }
+            });
         }
     } catch (error) {
         console.error("Error sending email: ", error);
-    } finally {
-        await db.orderaddresslink.create({
-            data: {
-                order_id: orderId,
-                token: token
-            }
-        });
+        throw error;
     }
 }, { connection: redis, concurrency: 50 })
 
