@@ -1,3 +1,4 @@
+import dotenv from "dotenv";
 import crypto from "crypto";
 import { Worker } from "bullmq";
 import { ApiVersion } from "@shopify/shopify-api";
@@ -6,6 +7,8 @@ import transporter from "./lib/mail.js";
 import db from "./lib/prisma.js";
 import redis from "./lib/redis.js";
 import renderTemplate from "./lib/template.js";
+
+dotenv.config();
 
 const worker = new Worker("orderAddressQueue", async (job) => {
 
@@ -222,7 +225,7 @@ const worker = new Worker("orderAddressQueue", async (job) => {
         ? [addressData.address1, addressData.address2, addressData.city, addressData.province, addressData.zip, addressData.country].filter(Boolean).join(", ")
         : "No address provided";
 
-    const updateLink = `https://your-app-url.com/address-update/${token}`;
+    const updateLink = `${process.env.APP_BASE_URL}/${token}`;
 
     const variables = {
         customer_name: fullName,
