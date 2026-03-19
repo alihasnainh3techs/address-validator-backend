@@ -26,6 +26,7 @@ model addressvalidationrule {
 model order {
   id               Int                  @id @default(autoincrement())
   shop             String
+  retry_count      Int                  @default(0)
   order_id         String
   name             String
   customer         String
@@ -33,7 +34,6 @@ model order {
   failed_rules     String?              @db.LongText
   created_at       DateTime             @default(now())
   updated_at       DateTime
-  retry_count      Int                  @default(0)
   orderaddresslink orderaddresslink[]
 
   @@unique([shop, order_id], map: "Order_shop_order_id_key")
@@ -100,6 +100,14 @@ model shoptags {
   awaiting_update_tag String @default("awaiting_customer_update")
   verified_tag        String @default("address_verified")
   updated_tag         String @default("address_updated")
+}
+
+model shopemailconfig {
+  id         Int      @id @default(autoincrement())
+  shop       String   @unique
+  config     String   @db.LongText
+  created_at DateTime @default(now())
+  updated_at DateTime
 }
 
 enum shopnotification_notification_type {
