@@ -1,9 +1,13 @@
 export function getIntervalMs(amount, unit) {
     switch (unit) {
-        case "MINUTES": return amount * 60 * 1000;
-        case "HOURS": return amount * 60 * 60 * 1000;
-        case "DAYS": return amount * 24 * 60 * 60 * 1000;
-        default: return amount * 60 * 60 * 1000;
+        case "MINUTES":
+            return amount * 60 * 1000;
+        case "HOURS":
+            return amount * 60 * 60 * 1000;
+        case "DAYS":
+            return amount * 24 * 60 * 60 * 1000;
+        default:
+            return amount * 60 * 60 * 1000;
     }
 }
 
@@ -28,9 +32,7 @@ export function buildName(order) {
         "Customer";
 
     const lastName =
-        order.shippingAddress?.lastName ||
-        order.customer?.lastName ||
-        "";
+        order.shippingAddress?.lastName || order.customer?.lastName || "";
 
     return `${firstName} ${lastName}`.trim();
 }

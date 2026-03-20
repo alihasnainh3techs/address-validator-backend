@@ -15,13 +15,15 @@ nodeCron.schedule("* * * * *", async () => {
         if (!orders.length) return;
 
         // Get unique shops and fetch all their configs at once
-        const uniqueShops = [...new Set(orders.map(o => o.shop))];
+        const uniqueShops = [...new Set(orders.map((o) => o.shop))];
         const shopConfigs = await db.shopconfig.findMany({
-            where: { shop: { in: uniqueShops } }
+            where: { shop: { in: uniqueShops } },
         });
 
         // Map for quick lookup
-        const configByShop = Object.fromEntries(shopConfigs.map(c => [c.shop, c]));
+        const configByShop = Object.fromEntries(
+            shopConfigs.map((c) => [c.shop, c])
+        );
 
         for (const order of orders) {
             const shopConfig = configByShop[order.shop];
@@ -35,7 +37,8 @@ nodeCron.schedule("* * * * *", async () => {
                 shopConfig.reminder_interval_unit
             );
 
-            const timeSinceLastUpdate = Date.now() - new Date(order.updated_at).getTime();
+            const timeSinceLastUpdate =
+                Date.now() - new Date(order.updated_at).getTime();
             if (timeSinceLastUpdate < intervalMs) continue;
 
             await orderAddressQueue.add("resend-notification", {
@@ -47,7 +50,9 @@ nodeCron.schedule("* * * * *", async () => {
                 action: "resend_notification",
             });
 
-            console.log(`Queued reminder for ${order.name} (shop: ${order.shop}, attempt ${order.retry_count + 1}/${shopConfig.max_retry_limit})`);
+            console.log(
+                `Queued reminder for ${order.name} (shop: ${order.shop}, attempt ${order.retry_count + 1}/${shopConfig.max_retry_limit})`
+            );
         }
     } catch (err) {
         console.error("Scheduler error:", err);

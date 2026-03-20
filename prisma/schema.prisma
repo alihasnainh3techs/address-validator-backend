@@ -89,7 +89,6 @@ model shopnotification {
   email_subject     String?
   email_body        String?                            @db.Text
   whatsapp_template String?                            @db.Text
-  test_count        Int                                @default(0)
   updated_at        DateTime                           @default(now())
 }
 
@@ -105,7 +104,7 @@ model shoptags {
 model shopemailconfig {
   id         Int      @id @default(autoincrement())
   shop       String   @unique
-  config     String   @db.LongText
+  config     String   @db.Text
   created_at DateTime @default(now())
   updated_at DateTime
 }
