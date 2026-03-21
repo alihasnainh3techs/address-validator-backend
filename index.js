@@ -1,5 +1,4 @@
 import { app } from "./app.js";
-import "./worker.js";
 import dotenv from "dotenv";
 
 dotenv.config();

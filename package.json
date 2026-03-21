@@ -8,6 +8,8 @@
     "main": "index.js",
     "scripts": {
         "dev": "nodemon index.js",
+        "worker": "node ./workers/worker.js",
+        "retry-worker": "node ./workers/retry-worker.js",
         "start": "node index.js",
         "format": "npx prettier . --write",
         "test": "echo \"Error: no test specified\" && exit 1"

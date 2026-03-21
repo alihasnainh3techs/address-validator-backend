@@ -2,15 +2,16 @@ import dotenv from "dotenv";
 import crypto from "crypto";
 import { Worker } from "bullmq";
 import { ApiVersion } from "@shopify/shopify-api";
-import shopify from "./lib/shopify.js";
+import shopify from "../lib/shopify.js";
 import {
     createGmailTransporter,
     createOutlookTransporter,
-} from "./lib/mail.js";
-import db from "./lib/prisma.js";
-import redis from "./lib/redis.js";
-import renderTemplate from "./lib/template.js";
-import { buildAddress, buildName } from "./utils.js";
+} from "../lib/mail.js";
+import db from "../lib/prisma.js";
+import redis from "../lib/redis.js";
+import renderTemplate from "../lib/template.js";
+import { buildAddress, buildName, getIntervalMs } from "../utils.js";
+import { retryQueue } from "../queue.js";
 
 dotenv.config();
 
@@ -267,6 +268,18 @@ const worker = new Worker(
                     updated_at: new Date(),
                 },
             });
+
+            const config = await db.shopconfig.findUnique({ where: { shop } });
+            const delayMs = getIntervalMs(config.reminder_interval_amount, config.reminder_interval_unit);
+
+            await retryQueue.add(
+                "send_reminder",
+                { ...job.data, action: "send_reminder" },
+                { delay: delayMs }
+            );
+
+            console.log("Job Added Again");
+
         }
     },
     { connection: redis, concurrency: 50 }
