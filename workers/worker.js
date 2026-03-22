@@ -270,7 +270,10 @@ const worker = new Worker(
             });
 
             const config = await db.shopconfig.findUnique({ where: { shop } });
-            const delayMs = getIntervalMs(config.reminder_interval_amount, config.reminder_interval_unit);
+            const delayMs = getIntervalMs(
+                config.reminder_interval_amount,
+                config.reminder_interval_unit
+            );
 
             await retryQueue.add(
                 "send_reminder",
@@ -279,7 +282,6 @@ const worker = new Worker(
             );
 
             console.log("Job Added Again");
-
         }
     },
     { connection: redis, concurrency: 50 }

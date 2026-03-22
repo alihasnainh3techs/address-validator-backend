@@ -17,8 +17,7 @@ dotenv.config();
 const worker = new Worker(
     "retryQueue",
     async (job) => {
-        const { shop, orderId, action } =
-            job.data;
+        const { shop, orderId, action } = job.data;
 
         const session = await db.session.findFirst({ where: { shop } });
         if (!session) throw new Error("Session not found");
@@ -34,14 +33,18 @@ const worker = new Worker(
             console.log("In remainder");
 
             const order = await db.order.findUnique({
-                where: { shop_order_id: { shop, order_id: orderId.toString() } }
+                where: {
+                    shop_order_id: { shop, order_id: orderId.toString() },
+                },
             });
 
-            const shopconfig = await db.shopconfig.findUnique({ where: { shop } });
+            const shopconfig = await db.shopconfig.findUnique({
+                where: { shop },
+            });
 
             const addressLink = await db.orderaddresslink.findFirst({
                 where: { order_id: order.id },
-                orderBy: { created_at: 'desc' }
+                orderBy: { created_at: "desc" },
             });
 
             if (!addressLink) {
@@ -50,13 +53,19 @@ const worker = new Worker(
             }
             const token = addressLink.token;
 
-            if (!order || order.address_status !== "AWAITING_CUSTOMER_RESPONSE" || order.retry_count >= shopconfig.max_retry_limit) {
-                return { message: "Retry cycle stopped: Order completed or limit reached." };
+            if (
+                !order ||
+                order.address_status !== "AWAITING_CUSTOMER_RESPONSE" ||
+                order.retry_count >= shopconfig.max_retry_limit
+            ) {
+                return {
+                    message:
+                        "Retry cycle stopped: Order completed or limit reached.",
+                };
             }
 
             console.log("Order: ", order);
             console.log("Order: ", addressLink);
-
 
             const orderDetails = await client.request(
                 `query getOrderDetails($id: ID!) {
@@ -159,11 +168,14 @@ const worker = new Worker(
 
             await db.order.update({
                 where: { id: order.id },
-                data: { retry_count: { increment: 1 } }
+                data: { retry_count: { increment: 1 } },
             });
 
             if (order.retry_count + 1 < shopconfig.max_retry_limit) {
-                const delayMs = getIntervalMs(shopconfig.reminder_interval_amount, shopconfig.reminder_interval_unit);
+                const delayMs = getIntervalMs(
+                    shopconfig.reminder_interval_amount,
+                    shopconfig.reminder_interval_unit
+                );
 
                 await retryQueue.add(
                     "send_reminder",

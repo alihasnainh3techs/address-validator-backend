@@ -1,5 +1,8 @@
 import db from "../lib/prisma.js";
-import { createGmailTransporter, createOutlookTransporter } from "../lib/mail.js";
+import {
+    createGmailTransporter,
+    createOutlookTransporter,
+} from "../lib/mail.js";
 import renderTemplate from "../lib/template.js";
 
 export async function sendTestEmail(req, res) {

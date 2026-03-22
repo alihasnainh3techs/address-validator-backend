@@ -109,6 +109,16 @@ model shopemailconfig {
   updated_at DateTime
 }
 
+model device {
+  id          Int           @id @default(autoincrement())
+  shop        String        @unique
+  status      device_status @default(DISCONNECTED)
+  sessionId   String        @db.Text
+  created_at  DateTime      @default(now())
+  updated_at  DateTime
+  device_name String
+}
+
 enum shopnotification_notification_type {
   WHATSAPP
   EMAIL
@@ -125,4 +135,9 @@ enum shopconfig_reminder_interval_unit {
   MINUTES
   HOURS
   DAYS
+}
+
+enum device_status {
+  CONNECTED
+  DISCONNECTED
 }

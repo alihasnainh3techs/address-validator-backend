@@ -1,3 +1,5 @@
+import "./workers/worker.js";
+import "./workers/retry-worker.js";
 import { app } from "./app.js";
 import dotenv from "dotenv";
 
