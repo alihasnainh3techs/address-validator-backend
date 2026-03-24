@@ -28,10 +28,11 @@ const retryWorker = new Worker(
 
         console.log("Job data: ", action, shop);
 
-
         const session = await db.session.findFirst({ where: { shop } });
         console.log("DB session in retry worker:", session);
-        if (!session) throw new Error("Session not found");
+        if (!session) {
+            throw new Error("Session not found");
+        };
 
         const client = new shopify.clients.Graphql({
             session,

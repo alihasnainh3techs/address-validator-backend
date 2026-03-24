@@ -30,7 +30,9 @@ const worker = new Worker(
 
         const session = await db.session.findFirst({ where: { shop } });
         console.log("DB session in worker:", session);
-        if (!session) throw new Error("Session not found");
+        if (!session) {
+            throw new Error("Session not found");
+        };
 
         const client = new shopify.clients.Graphql({
             session,

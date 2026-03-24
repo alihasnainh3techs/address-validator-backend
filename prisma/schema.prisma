@@ -112,11 +112,11 @@ model shopemailconfig {
 model device {
   id          Int           @id @default(autoincrement())
   shop        String        @unique
+  device_name String
   status      device_status @default(DISCONNECTED)
   sessionId   String        @unique
   created_at  DateTime      @default(now())
   updated_at  DateTime
-  device_name String
 }
 
 enum shopnotification_notification_type {
