@@ -36,3 +36,25 @@ export function buildName(order) {
 
     return `${firstName} ${lastName}`.trim();
 }
+
+export function interpolateVariables(template, variables) {
+    return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => {
+        return variables[key] !== undefined ? variables[key] : `{{${key}}}`;
+    });
+}
+
+export async function getWhatsappDeviceStatus(sessionId) {
+    const response = await fetch(
+        `${process.env.WHATSAPP_API_BASE}/get-device-status?apikey=${sessionId}`,
+        { method: "GET", headers: { "Content-Type": "application/json" } }
+    );
+
+    const data = await response.json();
+    return data;
+}
+
+export function formatPhoneNumber(phone) {
+    if (!phone) return null;
+
+    return phone.replace(/\D/g, "");
+}

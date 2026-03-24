@@ -9,17 +9,28 @@ import {
 import db from "../lib/prisma.js";
 import redis from "../lib/redis.js";
 import renderTemplate from "../lib/template.js";
-import { buildAddress, buildName, getIntervalMs } from "../utils.js";
+import {
+    buildAddress,
+    buildName,
+    getIntervalMs,
+    formatPhoneNumber,
+    getWhatsappDeviceStatus,
+    interpolateVariables,
+} from "../utils.js";
 import { retryQueue } from "../queue.js";
 
 dotenv.config();
 
-const worker = new Worker(
+const retryWorker = new Worker(
     "retryQueue",
     async (job) => {
         const { shop, orderId, action } = job.data;
 
+        console.log("Job data: ", action, shop);
+
+
         const session = await db.session.findFirst({ where: { shop } });
+        console.log("DB session in retry worker:", session);
         if (!session) throw new Error("Session not found");
 
         const client = new shopify.clients.Graphql({
@@ -75,9 +86,12 @@ const worker = new Worker(
             order(id: $id) {
                 name
                 email
+                phone 
                 customer {
                     firstName
                     lastName
+                    email
+                    phone
                 }
                 shippingAddress {
                     firstName
@@ -102,7 +116,15 @@ const worker = new Worker(
                 orderDetails.data?.order?.shippingAddress
             );
             const customer_name = buildName(orderDetails.data?.order);
-            const customer_email = orderDetails.data?.order?.email;
+            const customer_email =
+                orderDetails.data?.order?.email ||
+                orderDetails.data?.order?.customer?.email ||
+                null;
+            const customer_phone =
+                orderDetails.data?.order?.phone ||
+                orderDetails.data?.order?.shippingAddress?.phone ||
+                orderDetails.data?.order?.customer?.phone ||
+                null;
             const update_address_link = `${process.env.APP_BASE_URL}/address-update/${token}`;
 
             const variables = {
@@ -118,9 +140,65 @@ const worker = new Worker(
             });
 
             if (shopnotification.notification_type === "WHATSAPP") {
+                if (!customer_phone) {
+                    // Log it and skip — don't throw, don't crash the job
+                    console.warn(
+                        `No phone number for order ${orderId}, skipping WhatsApp notification`
+                    );
+                    return;
+                }
+
+                const device = await db.device.findUnique({ where: { shop } });
+                if (!device) {
+                    throw new Error("No WhatsApp device found for this shop");
+                }
+
+                const data = await getWhatsappDeviceStatus(device.sessionId);
+
+                if (!data.success) {
+                    // Sync DB status to DISCONNECTED
+                    await db.device.update({
+                        where: { shop },
+                        data: { status: "DISCONNECTED" },
+                    });
+                    throw new Error("WhatsApp device is not connected");
+                }
+
+                const msg = interpolateVariables(
+                    shopnotification.whatsapp_template,
+                    variables
+                );
+
+                // Send message via external WhatsApp API
+                const sendRes = await fetch(
+                    `${process.env.WHATSAPP_API_BASE}/send-message`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            apikey: device.sessionId,
+                            to: formatPhoneNumber(customer_phone),
+                            msg,
+                        }),
+                    }
+                );
+
+                const sendData = await sendRes.json();
+                if (!sendData.success) {
+                    throw new Error(
+                        sendData.message || "Failed to send WhatsApp message"
+                    );
+                }
             }
 
             if (shopnotification.notification_type === "EMAIL") {
+                if (!customer_email) {
+                    console.warn(
+                        `No email for order ${orderId}, skipping EMAIL notification`
+                    );
+                    return;
+                }
+
                 const subject = renderTemplate(
                     shopnotification.email_subject,
                     variables
@@ -135,34 +213,42 @@ const worker = new Worker(
                 });
                 const config = JSON.parse(shopemailconfig.config);
 
-                if (config.provider === "default") {
-                }
+                try {
+                    if (config.provider === "default") {
+                    }
 
-                if (config.provider === "google") {
-                    const { transporter, from } =
-                        createGmailTransporter(config);
+                    if (config.provider === "google") {
+                        const { transporter, from } =
+                            createGmailTransporter(config);
 
-                    await transporter.sendMail({
-                        from: from,
-                        to: customer_email,
-                        subject: subject,
-                        text: body,
-                    });
-                }
+                        await transporter.sendMail({
+                            from: from,
+                            to: customer_email,
+                            subject: subject,
+                            text: body,
+                        });
+                    }
 
-                if (config.provider === "sendgrid") {
-                }
+                    if (config.provider === "sendgrid") {
+                    }
 
-                if (config.provider === "outlook") {
-                    const { transporter, from } =
-                        createOutlookTransporter(config);
+                    if (config.provider === "outlook") {
+                        const { transporter, from } =
+                            createOutlookTransporter(config);
 
-                    await transporter.sendMail({
-                        from: from,
-                        to: customer_email,
-                        subject: subject,
-                        text: body,
-                    });
+                        await transporter.sendMail({
+                            from: from,
+                            to: customer_email,
+                            subject: subject,
+                            text: body,
+                        });
+                    }
+                } catch (error) {
+                    console.error(
+                        `Failed to send email for order ${orderId}:`,
+                        error.message
+                    );
+                    throw error;
                 }
             }
 
@@ -180,7 +266,16 @@ const worker = new Worker(
                 await retryQueue.add(
                     "send_reminder",
                     { ...job.data, action: "send_reminder" },
-                    { delay: delayMs }
+                    {
+                        delay: delayMs,
+                        attempts: 3,
+                        backoff: {
+                            type: "exponential",
+                            delay: 10000, // Wait 10s, then 20s, then 40s
+                        },
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
                 );
 
                 console.log("Job Added Again IN IF CONDITION");
@@ -191,10 +286,10 @@ const worker = new Worker(
     { connection: redis, concurrency: 50 }
 );
 
-worker.on("completed", (job) => {
+retryWorker.on("completed", (job) => {
     console.log(`${job.id} has completed!`);
 });
 
-worker.on("failed", (job, err) => {
+retryWorker.on("failed", (job, err) => {
     console.log(`${job.id} has failed with ${err.message}`);
 });
