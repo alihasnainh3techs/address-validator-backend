@@ -8,6 +8,7 @@
     "main": "index.js",
     "scripts": {
         "dev": "nodemon index.js",
+        "setup": "prisma generate && prisma migrate deploy",
         "start": "node index.js",
         "format": "npx prettier . --write",
         "test": "echo \"Error: no test specified\" && exit 1"
