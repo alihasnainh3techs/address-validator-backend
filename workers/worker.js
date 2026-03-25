@@ -17,6 +17,7 @@ import {
     getIntervalMs,
     getWhatsappDeviceStatus,
     interpolateVariables,
+    getValidSession
 } from "../utils.js";
 import { retryQueue } from "../queue.js";
 
@@ -28,11 +29,13 @@ const worker = new Worker(
         const { shop, orderId, customer, name, failedChecks, action } =
             job.data;
 
-        const session = await db.session.findFirst({ where: { shop } });
-        console.log("DB session in worker:", session);
-        if (!session) {
-            throw new Error("Session not found");
-        };
+        // const session = await db.session.findFirst({ where: { shop } });
+        // console.log("DB session in worker:", session);
+        // if (!session) {
+        //     throw new Error("Session not found");
+        // };
+
+        const session = await getValidSession(shop);
 
         const client = new shopify.clients.Graphql({
             session,
